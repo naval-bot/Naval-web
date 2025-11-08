@@ -1,12 +1,13 @@
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
 import path from 'path'
+import fs from 'fs'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
 
   const { phone } = req.body
-  if (!phone) return res.status(400).json({ error: 'Phone number required' })
+  if (!phone) return res.status(400).json({ error: 'Phone required' })
 
   try {
     const cleanedPhone = phone.replace(/\+/g, '')
@@ -19,33 +20,38 @@ export default async function handler(req, res) {
       browser: ['NeonSessionGen', 'Chrome', '1.0.0'],
     })
 
-    // Auto-save credentials
     sock.ev.on('creds.update', saveCreds)
 
-    // Wait until socket connects
-    await new Promise((resolve, reject) => {
-      sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
-        if (connection === 'open') resolve()
-        else if (connection === 'close') {
-          const statusCode = lastDisconnect?.error?.output?.statusCode
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-          if (!shouldReconnect) reject(new Error('Connection closed'))
-        }
-      })
-    })
-
-    // Request pairing code after connection
+    // Wait for the connection to open and pairing code to be generated
     const pairingCode = await sock.requestPairingCode(cleanedPhone)
 
     res.status(200).json({
-      message: 'Pairing code generated successfully',
+      message: 'Enter this code in your WhatsApp: Linked Devices → Link with phone number',
       pairingCode,
+    })
+
+    // After user enters the code, Baileys connects automatically
+    sock.ev.on('connection.update', async (update) => {
+      const { connection } = update
+      if (connection === 'open') {
+        const jid = cleanedPhone + '@s.whatsapp.net'
+
+        // Send the session file back to your WhatsApp
+        await sock.sendMessage(jid, {
+          document: { url: sessionPath },
+          mimetype: 'application/json',
+          fileName: 'session.json',
+        })
+
+        await sock.sendMessage(jid, { text: '✅ Session generated successfully!' })
+
+        // Clean up
+        fs.rmSync(sessionPath, { recursive: true, force: true })
+        sock.end()
+      }
     })
   } catch (err) {
     console.error(err)
-    res.status(500).json({
-      error: 'Failed to request pairing code',
-      details: err.message,
-    })
+    res.status(500).json({ error: 'Failed to generate pairing code', details: err.message })
   }
 }
