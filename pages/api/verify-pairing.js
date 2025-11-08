@@ -1,4 +1,4 @@
-import { makeWASocket, useSingleFileAuthState } from '@whiskeysockets/baileys'
+import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys'
 import path from 'path'
 import fs from 'fs'
 
@@ -8,12 +8,12 @@ export default async function handler(req, res) {
   if (!phone || !code) return res.status(400).json({ error: 'Phone and code required' })
 
   try {
-    const sessionPath = path.join('/tmp', `session-${phone}.json`)
-    const { state, saveState } = useSingleFileAuthState(sessionPath)
+    const sessionPath = path.join('/tmp', `session-${phone}`)
+const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
 
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
+const sock = makeWASocket({
+  auth: state,
+  printQRInTerminal: false,
       browser: ['NeonSessionGen', 'Chrome', '1.0.0']
     })
 
