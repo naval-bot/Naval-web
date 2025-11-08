@@ -12,7 +12,7 @@ const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
 
 const sock = makeWASocket({
   auth: state,
-  printQRInTerminal: false
+  printQRInTerminal: false,
       browser: ['NeonSessionGen', 'Chrome', '1.0.0']
     })
 
